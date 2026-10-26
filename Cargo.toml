@@ -1,0 +1,11 @@
+[package]
+name = "rusqlite-sample"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+rusqlite = { version = "0.41.0", features = ["time"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_rusqlite = "0.44.0"
+time = "0.3.55"
