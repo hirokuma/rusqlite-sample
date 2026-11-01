@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
-rusqlite = { version = "0.41.0", features = ["time"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_rusqlite = "0.44.0"
+chrono = "0.4.45"
+jiff = "0.2.38"
+rusqlite = { version = "0.41.1", features = ["chrono", "jiff", "time"] }
 time = "0.3.55"
