@@ -1,76 +1,97 @@
-use rusqlite::{
-    Connection,
-    types::{FromSql, ValueRef},
-};
+use anyhow::Result;
+use bitcoin::{NetworkKind, PrivateKey, key::Secp256k1};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+use sha2::{Digest, Sha256};
+use time::OffsetDateTime;
 
-#[derive(Deserialize, Serialize)]
-struct Person {
-    id: i32,
-    #[serde(deserialize_with = "convert_datetime")]
-    #[serde(serialize_with = "convert_from_datetime")]
+#[derive(Debug, Serialize, Deserialize)]
+struct DbData {
+    #[serde(with = "serde_bytes_array")]
+    hash: [u8; 32],
+    #[serde(with = "serde_bytes_array")]
+    pubkey: [u8; 33],
+    #[serde(with = "time::serde::rfc3339")]
     created_at: OffsetDateTime,
-    name: String,
+    #[serde(with = "time::serde::rfc3339::option")]
+    updated_at: Option<OffsetDateTime>,
 }
 
-fn main() -> anyhow::Result<()> {
-    let conn = Connection::open_in_memory()?;
-
-    conn.execute(
-        "CREATE TABLE person (
-            id          INTEGER PRIMARY KEY,
-            created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-            name        TEXT NOT NULL
-        )",
-        (),
-    )?;
-
-    conn.execute(
-        "INSERT INTO person (name) VALUES (?)",
-        serde_rusqlite::to_params("yoshio")?,
-    )?;
-    let person2 = Person {
-        id: 256,
-        created_at: OffsetDateTime::now_utc(),
-        name: "masao".to_string(),
-    };
-    let params = serde_rusqlite::to_params_named(&person2)?;
-    conn.execute(
-        "INSERT INTO person (id, created_at, name) VALUES (:id, :created_at, :name)",
-        params.to_slice().as_slice(),
-    )?;
-
-    let mut stmt = conn.prepare("SELECT * FROM person")?;
-    let mut rows = stmt.query([])?;
-    let mut people = Vec::new();
-    while let Some(row) = rows.next()? {
-        let v: Person = serde_rusqlite::from_row(row)?;
-        people.push(v);
+impl std::fmt::Display for DbData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "hash: {}", hex::encode(self.hash))?;
+        writeln!(f, "pubkey: {}", hex::encode(self.pubkey))?;
+        writeln!(f, "created_at: {}", self.created_at)?;
+        match self.updated_at {
+            Some(updated_at) => write!(f, "updated_at: {updated_at}"),
+            None => write!(f, "updated_at: None"),
+        }
     }
-    for person in people {
-        println!("id: {}", person.id);
-        println!("  name      : {}", person.name);
-        println!("  created_at: {}", person.created_at);
+}
+
+fn main() -> Result<()> {
+    // let conn = Connection::open_in_memory()?;
+    let conn = Connection::open("/tmp/test.db")?;
+    conn.execute(
+        "CREATE TABLE test (
+            hash BLOB NOT NULL,
+            pubkey BLOB NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT
+        )",
+        [],
+    )?;
+
+    let hash = Sha256::digest(b"hello world");
+    let privkey = PrivateKey::generate(NetworkKind::Test);
+    let secp = Secp256k1::new();
+    let pubkey = privkey.public_key(&secp);
+    let data = DbData {
+        hash: hash.into(),
+        pubkey: pubkey.inner.serialize(),
+        created_at: OffsetDateTime::now_utc(),
+        updated_at: None,
+    };
+    conn.execute(
+        "INSERT INTO test (
+            hash, pubkey, created_at, updated_at
+        ) VALUES (
+            :hash,
+            :pubkey,
+            :created_at,
+            :updated_at
+        )",
+        serde_rusqlite::to_params_named(&data)?
+            .to_slice()
+            .as_slice(),
+    )?;
+
+    let mut stmt = conn.prepare("SELECT * FROM test")?;
+    let rows: Vec<DbData> =
+        serde_rusqlite::from_rows(stmt.query([])?).collect::<serde_rusqlite::Result<_>>()?;
+    for data in rows {
+        println!("{}", data);
     }
     Ok(())
 }
 
-fn convert_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    <OffsetDateTime as FromSql>::column_result(ValueRef::Text(s.as_bytes()))
-        .map_err(serde::de::Error::custom)
-}
+mod serde_bytes_array {
+    use serde::{Deserialize, Deserializer, Serializer, de::Error};
 
-fn convert_from_datetime<S>(datetime: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    let text = datetime
-        .format(&Rfc3339)
-        .map_err(serde::ser::Error::custom)?;
-    serializer.serialize_str(&text)
+    pub fn serialize<const N: usize, S>(bytes: &[u8; N], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(bytes)
+    }
+
+    pub fn deserialize<'de, const N: usize, D>(deserializer: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        bytes
+            .try_into()
+            .map_err(|bytes: Vec<u8>| D::Error::invalid_length(bytes.len(), &"a byte array"))
+    }
 }

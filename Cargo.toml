@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
-rusqlite = { version = "0.41.0", features = ["time"] }
+bitcoin = { version = "0.32.102", features = ["rand-std"] }
+hex = "0.4.3"
+rusqlite = { version = "0.43.0", features = ["time"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_rusqlite = "0.44.0"
-time = "0.3.55"
+serde_rusqlite = "0.45.0"
+sha2 = "0.11.1"
+time = { version = "0.3.55", features = ["serde", "formatting", "parsing"] }
