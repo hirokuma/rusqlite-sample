@@ -1,19 +1,13 @@
 use anyhow::Result;
 use bitcoin::{NetworkKind, PrivateKey, key::Secp256k1};
-use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
+use rusqlite::{Connection, named_params};
 use sha2::{Digest, Sha256};
 use time::OffsetDateTime;
 
-#[derive(Debug, Serialize, Deserialize)]
 struct DbData {
-    #[serde(with = "serde_bytes_array")]
     hash: [u8; 32],
-    #[serde(with = "serde_bytes_array")]
     pubkey: [u8; 33],
-    #[serde(with = "time::serde::rfc3339")]
     created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
     updated_at: Option<OffsetDateTime>,
 }
 
@@ -61,37 +55,25 @@ fn main() -> Result<()> {
             :created_at,
             :updated_at
         )",
-        serde_rusqlite::to_params_named(&data)?
-            .to_slice()
-            .as_slice(),
+        named_params! {
+            ":hash": data.hash,
+            ":pubkey": data.pubkey,
+            ":created_at": data.created_at,
+            ":updated_at": data.updated_at,
+        },
     )?;
 
-    let mut stmt = conn.prepare("SELECT * FROM test")?;
-    let rows: Vec<DbData> =
-        serde_rusqlite::from_rows(stmt.query([])?).collect::<serde_rusqlite::Result<_>>()?;
-    for data in rows {
-        println!("{}", data);
+    let mut stmt = conn.prepare("SELECT hash, pubkey, created_at, updated_at FROM test")?;
+    let iter = stmt.query_map([], |row| {
+        Ok(DbData {
+            hash: row.get(0)?,
+            pubkey: row.get(1)?,
+            created_at: row.get(2)?,
+            updated_at: row.get(3)?,
+        })
+    })?;
+    for data in iter {
+        println!("{}", data?);
     }
     Ok(())
-}
-
-mod serde_bytes_array {
-    use serde::{Deserialize, Deserializer, Serializer, de::Error};
-
-    pub fn serialize<const N: usize, S>(bytes: &[u8; N], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(bytes)
-    }
-
-    pub fn deserialize<'de, const N: usize, D>(deserializer: D) -> Result<[u8; N], D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let bytes = Vec::<u8>::deserialize(deserializer)?;
-        bytes
-            .try_into()
-            .map_err(|bytes: Vec<u8>| D::Error::invalid_length(bytes.len(), &"a byte array"))
-    }
 }

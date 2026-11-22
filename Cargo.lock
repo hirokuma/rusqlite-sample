@@ -434,8 +434,6 @@ dependencies = [
  "bitcoin",
  "hex",
  "rusqlite",
- "serde",
- "serde_rusqlite",
  "sha2",
  "time",
 ]
@@ -494,16 +492,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
-]
-
-[[package]]
-name = "serde_rusqlite"
-version = "0.45.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97802a13b286a23838e5d4ce495ad82c98be4756e40ff0608596399bc0b2f625"
-dependencies = [
- "rusqlite",
- "serde_core",
 ]
 
 [[package]]
