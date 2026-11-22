@@ -63,13 +63,17 @@ fn main() -> Result<()> {
         },
     )?;
 
-    let mut stmt = conn.prepare("SELECT hash, pubkey, created_at, updated_at FROM test")?;
+    let mut stmt = conn.prepare("SELECT * FROM test")?;
+    let i_hash = stmt.column_index("hash")?;
+    let i_pubkey = stmt.column_index("pubkey")?;
+    let i_created_at = stmt.column_index("created_at")?;
+    let i_updated_at = stmt.column_index("updated_at")?;
     let iter = stmt.query_map([], |row| {
         Ok(DbData {
-            hash: row.get(0)?,
-            pubkey: row.get(1)?,
-            created_at: row.get(2)?,
-            updated_at: row.get(3)?,
+            hash: row.get(i_hash)?,
+            pubkey: row.get(i_pubkey)?,
+            created_at: row.get(i_created_at)?,
+            updated_at: row.get(i_updated_at)?,
         })
     })?;
     for data in iter {
