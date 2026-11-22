@@ -29,6 +29,16 @@ impl std::fmt::Display for DbData {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct DbUpdateData {
+    #[serde(with = "serde_bytes_array")]
+    hash: [u8; 32],
+    #[serde(with = "serde_bytes_array")]
+    pubkey: [u8; 33],
+    #[serde(with = "time::serde::rfc3339")]
+    updated_at: OffsetDateTime,
+}
+
 fn main() -> Result<()> {
     // let conn = Connection::open_in_memory()?;
     let conn = Connection::open("/tmp/test.db")?;
@@ -62,6 +72,26 @@ fn main() -> Result<()> {
             :updated_at
         )",
         serde_rusqlite::to_params_named(&data)?
+            .to_slice()
+            .as_slice(),
+    )?;
+
+    let hash = Sha256::digest(b"Guten Tag");
+    let updata = DbUpdateData {
+        hash: hash.into(),
+        pubkey: data.pubkey,
+        updated_at: OffsetDateTime::now_utc(),
+    };
+    conn.execute(
+        "UPDATE
+            test
+        SET
+            hash = :hash,
+            updated_at = :updated_at
+        WHERE
+            pubkey = :pubkey
+        ",
+        serde_rusqlite::to_params_named(&updata)?
             .to_slice()
             .as_slice(),
     )?;
