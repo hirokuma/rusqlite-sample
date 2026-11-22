@@ -23,6 +23,12 @@ impl std::fmt::Display for DbData {
     }
 }
 
+struct DbUpdateData {
+    hash: [u8; 32],
+    pubkey: [u8; 33],
+    updated_at: OffsetDateTime,
+}
+
 fn main() -> Result<()> {
     // let conn = Connection::open_in_memory()?;
     let conn = Connection::open("/tmp/test.db")?;
@@ -60,6 +66,27 @@ fn main() -> Result<()> {
             ":pubkey": data.pubkey,
             ":created_at": data.created_at,
             ":updated_at": data.updated_at,
+        },
+    )?;
+
+    let updata = DbUpdateData {
+        hash: Sha256::digest(b"Guten Tag").into(),
+        pubkey: data.pubkey,
+        updated_at: OffsetDateTime::now_utc(),
+    };
+    conn.execute(
+        "UPDATE
+            test
+        SET
+            hash = :hash,
+            updated_at = :updated_at
+        WHERE
+            pubkey = :pubkey
+        ",
+        named_params! {
+            ":hash": updata.hash,
+            ":pubkey": updata.pubkey,
+            ":updated_at": updata.updated_at,
         },
     )?;
 
